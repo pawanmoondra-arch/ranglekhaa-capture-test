@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#263b2f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Ranglekhaa Capture</title>
+<style>
+:root{--green:#263b2f;--paper:#f6f5f0;--line:#dddcd5;--muted:#667069}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);font-family:Arial,sans-serif;color:var(--green)}
+main{max-width:560px;margin:auto;padding:20px 16px 40px}
+.brand{font-size:24px;font-weight:700;letter-spacing:2px}.sub{color:var(--muted);margin:5px 0 22px}
+label{display:block;font-weight:700;margin:14px 0 7px}
+select{width:100%;padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px;margin-top:14px}
+h3{margin:0 0 5px;font-size:18px}.req{font-size:11px;font-weight:700;letter-spacing:.7px}.opt{color:var(--muted)}
+.help{font-size:13px;color:var(--muted);line-height:1.4;margin:7px 0 12px}
+.row{display:flex;gap:9px}.btn{flex:1;border:0;border-radius:9px;padding:13px 8px;font-size:15px}
+.dark{background:var(--green);color:white}.light{background:#e9e9e3;color:var(--green)}
+input[type=file]{display:none}.preview{display:none;width:100%;max-height:280px;object-fit:contain;border-radius:9px;margin-top:12px;background:#eee}
+.save,.replace{display:none;width:100%;margin-top:9px}.save{background:var(--green);color:#fff}.replace{background:#e9e9e3;color:var(--green)}
+.status{margin-top:18px;background:#fff;border:1px solid var(--line);padding:13px;border-radius:10px;line-height:1.45}.ok{color:#2e6b45}.bad{color:#9b2c2c}
+.install{display:none;margin:14px 0;padding:13px;border-radius:10px;background:#dfe7e1}.install button{width:100%;padding:12px;border:0;border-radius:8px;background:var(--green);color:#fff}
+</style>
+</head>
+<body>
+<main>
+<div class="brand">RANGLEKHAA</div>
+<div class="sub">Product Capture</div>
+<div id="installBox" class="install"><b>Install Ranglekhaa</b><p>Add this app to your phone home screen.</p><button id="installBtn">INSTALL APP</button></div>
+
+<label>Article Number</label>
+<select id="article"><option value="">Select Article</option></select>
+
+<label>Capture Stage</label>
+<select id="stage">
+<option value="DEVELOPMENT">Development</option>
+<option value="FINISHED">Finished Product</option>
+</select>
+
+<div id="photoArea"></div>
+<div id="status" class="status" style="display:none"></div>
+</main>
+
+<script>
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbywb8x915ZPzm4sjZz_DvI1zAez_tqVgTCzjhPH5-vPn-ML_oxzV2NUJ30E_3u0cw5Hsg/exec";
+let deferredPrompt=null, state={};
+const cfg={
+DEVELOPMENT:[
+["COLOUR_OPTIONS","Colour Options","Required — all approved colour options together.",1],
+["EMBROIDERY_SAMPLE","Approved Embroidery Sample","Required — approved embroidery/value-addition sample.",1]],
+FINISHED:[
+["FINISHED_01","Full Product — Front","Required — clear full-product photograph.",1],
+["FINISHED_02","Back / Overall","Required — back or another useful overall view.",1],
+["FINISHED_03","Embroidery / Work Detail","Required — clear workmanship/detail close-up.",1],
+["FINISHED_04","Fabric / Texture Close-up","Required — show fabric texture, print or finish.",1],
+["FINISHED_05","Dupatta / Important Component","Optional.",0],
+["FINISHED_06","Colour Options / Assortment","Optional — all available colours together.",0]]
+};
+
+function msg(t,bad=false){let s=document.getElementById("status");s.style.display="block";s.className="status "+(bad?"bad":"ok");s.innerHTML=t}
+function render(){
+let a=document.getElementById("photoArea");a.innerHTML="";
+cfg[stage.value].forEach(x=>box(...x))
+}
+function box(type,title,help,required){
+let d=document.createElement("div");d.className="card";
+d.innerHTML=`<h3>${title}</h3><div class="req ${required?'':'opt'}">${required?'REQUIRED':'OPTIONAL'}</div><div class="help">${help}</div>`;
+let cam=document.createElement("input");cam.type="file";cam.accept="image/*";cam.capture="environment";
+let gal=document.createElement("input");gal.type="file";gal.accept="image/*";
+let r=document.createElement("div");r.className="row";
+let cb=document.createElement("button");cb.className="btn dark";cb.textContent="📷 Take Photo";
+let gb=document.createElement("button");gb.className="btn light";gb.textContent="🖼️ Gallery";
+r.append(cb,gb);
+let img=document.createElement("img");img.className="preview";
+let save=document.createElement("button");save.className="btn save";save.textContent="SAVE PHOTO";
+let rep=document.createElement("button");rep.className="btn replace";rep.textContent="RETAKE / CHOOSE ANOTHER";
+cb.onclick=()=>cam.click();gb.onclick=()=>gal.click();
+cam.onchange=()=>pick(type,cam.files[0],img,save,rep);
+gal.onchange=()=>pick(type,gal.files[0],img,save,rep);
+save.onclick=()=>send(type,state[type],save);
+rep.onclick=()=>{state[type]=null;img.style.display="none";save.style.display="none";rep.style.display="none";cam.value="";gal.value=""};
+d.append(cam,gal,r,img,save,rep);document.getElementById("photoArea").appendChild(d)
+}
+function pick(type,file,img,save,rep){
+if(!file)return;if(!file.type.startsWith("image/"))return msg("Please select an image.",true);
+state[type]=file;let rd=new FileReader();rd.onload=e=>{img.src=e.target.result;img.style.display="block";save.style.display="block";rep.style.display="block";msg("Review the photo before saving.")};rd.readAsDataURL(file)
+}
+function send(type,file,btn){
+if(!article.value)return msg("Select an Article Number first.",true);
+if(BACKEND_URL.includes("PASTE_"))return msg("Backend URL is not configured yet.",true);
+btn.disabled=true;btn.textContent="SAVING...";
+let rd=new FileReader();rd.onload=e=>{
+let payload={articleNo:article.value,stage:stage.value,photoType:type,fileName:file.name,mimeType:file.type,fileData:e.target.result};
+fetch(BACKEND_URL,{method:"POST",body:JSON.stringify(payload)})
+.then(r=>r.json()).then(x=>{btn.disabled=false;btn.textContent="SAVED ✓";msg("✓ Photo saved successfully.")})
+.catch(e=>{btn.disabled=false;btn.textContent="SAVE PHOTO";msg("Upload failed: "+e.message,true)})
+};rd.readAsDataURL(file)
+}
+stage.onchange=()=>{state={};render()};
+document.addEventListener("DOMContentLoaded",render);
+
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBox.style.display="block"});
+installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;installBox.style.display="none"}};
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>
