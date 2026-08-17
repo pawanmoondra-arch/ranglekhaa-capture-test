@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#20372b">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Ranglekhaa Capture</title>
+<style>
+:root{--green:#20372b;--cream:#f7f5ef;--line:#ddd9ce;--muted:#6c726d;--ok:#2d6b48;--gold:#8a6d25;--danger:#a33b35}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);font-family:Arial,sans-serif;color:#1d2b24}
+main{max-width:620px;margin:auto;padding:20px 16px 42px}
+header{margin-bottom:18px}.brand{font-size:26px;font-weight:800;letter-spacing:3px}.tag{color:var(--muted);margin-top:4px}
+.install{display:none;background:#e0e9e2;border-radius:14px;padding:15px;margin:15px 0}.install button{width:100%;border:0;border-radius:9px;background:var(--green);color:#fff;padding:13px;font-weight:700}
+label{font-weight:700;display:block;margin:15px 0 7px}
+select{width:100%;padding:14px;border:1px solid var(--line);border-radius:11px;background:#fff;font-size:16px}
+.operator{margin:14px 0;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:#fff;font-size:13px;color:var(--muted)}
+.operator b{color:var(--green)}
+.summary{margin-top:16px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+.summary-title{font-size:19px;font-weight:800}.count{margin-top:6px}.progress{height:8px;background:#e5e3dc;border-radius:10px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--green)}
+.state{font-weight:800}.complete{color:var(--ok)}.locked{color:var(--green)}.incomplete{color:var(--gold)}
+.action{width:100%;border:0;border-radius:10px;padding:14px;margin-top:10px;font-size:15px;font-weight:700}.lock{background:var(--green);color:#fff}.unlock{background:#ecebe5;color:var(--green)}
+.section{font-size:13px;font-weight:800;letter-spacing:1.3px;margin:24px 0 10px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px;margin:11px 0}
+.card h3{margin:0 0 5px;font-size:18px}.required{font-size:11px;font-weight:800}.optional{font-size:11px;font-weight:800;color:var(--muted)}
+.help{font-size:13px;color:var(--muted);line-height:1.4;margin:8px 0}
+.badge{display:inline-block;margin:2px 0 8px;padding:5px 9px;border-radius:18px;background:#eeece5;font-size:11px;font-weight:800}
+.badge.ok{background:#e2ece5;color:var(--ok)}.badge.locked{background:#e2e7e3;color:var(--green)}
+.filename{font-size:12px;color:var(--muted);overflow-wrap:anywhere;margin-bottom:8px}
+.row{display:flex;gap:9px}.btn{flex:1;border:0;border-radius:9px;padding:13px 7px;font-size:15px}.dark{background:var(--green);color:#fff}.light{background:#e9e8e2;color:#1d2b24}
+input[type=file]{display:none}.preview{display:none;width:100%;max-height:300px;object-fit:contain;border-radius:9px;margin-top:10px;background:#eee}
+.save,.cancel,.view{display:none;width:100%;margin-top:9px}.save{background:var(--green);color:#fff}.cancel{background:#e9e8e2;color:#1d2b24}
+.message{display:none;margin:14px 0;padding:12px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:14px}.error{border-color:#d8aaa6;color:var(--danger)}
+</style>
+</head>
+<body>
+<main>
+<header><div class="brand">RANGLEKHAA</div><div class="tag">Product Capture</div></header>
+
+<div id="install" class="install">
+  <b>Install Ranglekhaa</b>
+  <div style="margin:7px 0 12px">Add this app to your phone home screen.</div>
+  <button id="installBtn">INSTALL APP</button>
+</div>
+
+<div class="operator"><b>Operator:</b> Naveen &nbsp;•&nbsp; <b>Unlock authority:</b> Pawan</div>
+
+<label>Article Number</label>
+<select id="article"><option>Loading...</option></select>
+
+<label>Capture Stage</label>
+<select id="stage">
+  <option value="DEVELOPMENT">Development</option>
+  <option value="FINISHED">Finished Product</option>
+</select>
+
+<div id="message" class="message"></div>
+<div id="summary"></div>
+<div id="cards"></div>
+</main>
+
+<script>
+const API='https://script.google.com/macros/s/AKfycbwE9B1MqWx59bqKOnl_0ojyTxp_Z5yx1L0FIM3_EHHBtozJcpK89nXWxuhngHkGE3VW9Q/exec';
+const NAVEEN='nsoni9068@gmail.com';
+const PAWAN='pawanmoondra@gmail.com';
+
+const RULES={
+ DEVELOPMENT:[
+  ['COLOUR_OPTIONS','Colour Options','Required — all approved colour options together.',true],
+  ['EMBROIDERY_SAMPLE','Approved Embroidery Sample','Required — approved embroidery/value-addition sample.',true]
+ ],
+ FINISHED:[
+  ['FINISHED_01','Full Product — Front','Required — clear full-product photograph.',true],
+  ['FINISHED_02','Back / Overall','Required — back or another useful overall view.',true],
+  ['FINISHED_03','Embroidery / Work Detail','Required — clear workmanship/detail close-up.',true],
+  ['FINISHED_04','Fabric / Texture Close-up','Required — show fabric texture, print or finish.',true],
+  ['FINISHED_05','Important Component','Optional — useful when there is a significant component.',false],
+  ['FINISHED_06','Colour Options / Assortment','Optional — all available colours together.',false]
+ ]};
+
+let status=null,captures={},pending={},deferred=null;
+
+function msg(t,error=false){const e=document.getElementById('message');e.style.display='block';e.className='message'+(error?' error':'');e.textContent=t}
+function clearMsg(){document.getElementById('message').style.display='none'}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+
+async function getJson(url){
+ const r=await fetch(url+'&_='+Date.now(),{cache:'no-store'});
+ const d=await r.json(); if(!d.success) throw new Error(d.error||'Request failed'); return d;
+}
+
+async function loadArticles(){
+ try{
+  const d=await getJson(API+'?action=articles');
+  const s=document.getElementById('article');
+  s.innerHTML='<option value="">Select Article Number</option>';
+  d.articles.forEach(a=>{const o=document.createElement('option');o.value=a.articleNo;o.textContent=a.articleNo;s.appendChild(o)});
+  if(d.articles.length) s.value=d.articles[0].articleNo;
+  await load();
+ }catch(e){msg(e.message,true)}
+}
+
+async function load(){
+ clearMsg(); const article=document.getElementById('article').value;
+ if(!article){document.getElementById('summary').innerHTML='';document.getElementById('cards').innerHTML='';return}
+ try{
+  const [s,c]=await Promise.all([
+   getJson(API+'?action=status&article='+encodeURIComponent(article)),
+   getJson(API+'?action=captures&article='+encodeURIComponent(article))
+  ]);
+  status=s.status;captures={};
+  (c.captures||[]).forEach(x=>captures[x.stage+'|'+x.photoType]=x);
+  render();
+ }catch(e){msg(e.message,true)}
+}
+
+function render(){
+ const stage=document.getElementById('stage').value;
+ const st=status[stage];
+ const pct=st.requiredTotal?Math.round(st.requiredCaptured/st.requiredTotal*100):100;
+ let stateText=st.locked?'🔒 LOCKED':st.complete?'✓ COMPLETE':'○ INCOMPLETE';
+ let stateClass=st.locked?'locked':st.complete?'complete':'incomplete';
+ document.getElementById('summary').innerHTML=`
+ <div class="summary">
+  <div class="summary-title">${stage==='DEVELOPMENT'?'Development':'Finished Product'}</div>
+  <div class="count">${st.requiredCaptured}/${st.requiredTotal} required captures complete</div>
+  <div class="progress"><div class="bar" style="width:${pct}%"></div></div>
+  <div class="state ${stateClass}">${stateText}</div>
+  ${st.complete&&!st.locked?'<button class="action lock" id="lockBtn">SUBMIT & LOCK</button>':''}
+  ${st.locked?'<div style="font-size:12px;color:#6c726d;margin-top:8px">Changes are disabled. Pawan must unlock this stage before correction.</div>':''}
+ </div>`;
+ document.getElementById('cards').innerHTML='<div class="section">'+(stage==='DEVELOPMENT'?'DEVELOPMENT REFERENCES':'FINISHED PRODUCT')+'</div>';
+ RULES[stage].forEach(r=>card(r[0],r[1],r[2],r[3],stage,st.locked));
+ const b=document.getElementById('lockBtn'); if(b)b.onclick=()=>lockStage(stage,b);
+}
+
+function card(type,title,help,required,stage,locked){
+ const ex=captures[stage+'|'+type];
+ const d=document.createElement('div');d.className='card';
+ d.innerHTML=`<h3>${title}</h3><div class="${required?'required':'optional'}">${required?'REQUIRED':'OPTIONAL'}</div><div class="help">${help}</div>
+ <div class="badge ${locked?'locked':ex?'ok':''}">${locked?'🔒 LOCKED':ex?'✓ CAPTURED':'○ NOT CAPTURED'}</div>
+ ${ex?'<div class="filename">Current: '+esc(ex.fileName)+'</div>':''}`;
+ const cam=document.createElement('input');cam.type='file';cam.accept='image/*';cam.capture='environment';
+ const gal=document.createElement('input');gal.type='file';gal.accept='image/*';
+ const row=document.createElement('div');row.className='row';
+ const cb=document.createElement('button');cb.className='btn dark';cb.textContent=ex?'📷 Take Replacement':'📷 Take Photo';
+ const gb=document.createElement('button');gb.className='btn light';gb.textContent='🖼️ Gallery';
+ const img=document.createElement('img');img.className='preview';
+ const save=document.createElement('button');save.className='action save';save.textContent=ex?'REPLACE PHOTO':'SAVE PHOTO';
+ const cancel=document.createElement('button');cancel.className='action cancel';cancel.textContent='CANCEL';
+ const view=document.createElement('button');view.className='action view light';view.textContent='OPEN CURRENT PHOTO';
+ if(ex&&ex.url){view.style.display='block';view.onclick=()=>window.open(ex.url,'_blank')}
+ if(locked){cb.disabled=true;gb.disabled=true}else{cb.onclick=()=>cam.click();gb.onclick=()=>gal.click()}
+ cam.onchange=()=>choose(type,cam.files[0],img,save,cancel);
+ gal.onchange=()=>choose(type,gal.files[0],img,save,cancel);
+ save.onclick=()=>upload(type,pending[type],save,!!ex);
+ cancel.onclick=()=>{pending[type]=null;img.style.display='none';save.style.display='none';cancel.style.display='none'};
+ row.append(cb,gb);d.append(cam,gal,row,img,save,cancel,view);document.getElementById('cards').appendChild(d);
+}
+
+function choose(type,file,img,save,cancel){
+ if(!file)return;
+ if(!file.type.startsWith('image/')){msg('Please select an image.',true);return}
+ pending[type]=file;
+ const r=new FileReader();r.onload=e=>{img.src=e.target.result;img.style.display='block';save.style.display='block';cancel.style.display='block';msg('Review the image, then save it.')}
+ r.readAsDataURL(file);
+}
+
+function upload(type,file,button,replacement){
+ if(!file)return;
+ const article=document.getElementById('article').value,stage=document.getElementById('stage').value;
+ button.disabled=true;button.textContent=replacement?'REPLACING...':'SAVING...';
+ const r=new FileReader();
+ r.onload=async e=>{
+  try{
+   const body=JSON.stringify({action:replacement?'REPLACE':'CREATE',articleNo:article,stage:stage,photoType:type,fileName:file.name,mimeType:file.type||'image/jpeg',fileData:e.target.result});
+   await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body});
+   msg('✓ Photo sent. Updating status...');
+   pending[type]=null;setTimeout(load,1800);
+  }catch(err){button.disabled=false;button.textContent=replacement?'REPLACE PHOTO':'SAVE PHOTO';msg(err.message,true)}
+ };
+ r.readAsDataURL(file);
+}
+
+async function lockStage(stage,button){
+ const article=document.getElementById('article').value;
+ button.disabled=true;button.textContent='LOCKING...';
+ try{
+  await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'LOCK',articleNo:article,stage:stage,userEmail:NAVEEN})});
+  msg('✓ Stage locked.');
+  setTimeout(load,1800);
+ }catch(e){button.disabled=false;button.textContent='SUBMIT & LOCK';msg(e.message,true)}
+}
+
+document.getElementById('article').onchange=load;
+document.getElementById('stage').onchange=render;
+
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;document.getElementById('install').style.display='block'});
+document.getElementById('installBtn').onclick=async()=>{if(deferred){await deferred.prompt();deferred=null;document.getElementById('install').style.display='none'}};
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+loadArticles();
+</script>
+</body>
+</html>
