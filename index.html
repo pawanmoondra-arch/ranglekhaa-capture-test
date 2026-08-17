@@ -23,16 +23,22 @@ input[type=file]{display:none}.preview{display:none;width:100%;max-height:280px;
 .save,.replace{display:none;width:100%;margin-top:9px}.save{background:var(--green);color:#fff}.replace{background:#e9e9e3;color:var(--green)}
 .status{margin-top:18px;background:#fff;border:1px solid var(--line);padding:13px;border-radius:10px;line-height:1.45}.ok{color:#2e6b45}.bad{color:#9b2c2c}
 .install{display:none;margin:14px 0;padding:13px;border-radius:10px;background:#dfe7e1}.install button{width:100%;padding:12px;border:0;border-radius:8px;background:var(--green);color:#fff}
+.section{margin-top:22px;font-weight:700;font-size:13px;letter-spacing:1px}
 </style>
 </head>
 <body>
 <main>
 <div class="brand">RANGLEKHAA</div>
 <div class="sub">Product Capture</div>
-<div id="installBox" class="install"><b>Install Ranglekhaa</b><p>Add this app to your phone home screen.</p><button id="installBtn">INSTALL APP</button></div>
+
+<div id="installBox" class="install">
+<b>Install Ranglekhaa</b>
+<p>Add this app to your phone home screen.</p>
+<button id="installBtn">INSTALL APP</button>
+</div>
 
 <label>Article Number</label>
-<select id="article"><option value="">Select Article</option></select>
+<select id="article"><option value="">Loading articles...</option></select>
 
 <label>Capture Stage</label>
 <select id="stage">
@@ -45,66 +51,264 @@ input[type=file]{display:none}.preview{display:none;width:100%;max-height:280px;
 </main>
 
 <script>
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbywb8x915ZPzm4sjZz_DvI1zAez_tqVgTCzjhPH5-vPn-ML_oxzV2NUJ30E_3u0cw5Hsg/exec";
-let deferredPrompt=null, state={};
-const cfg={
-DEVELOPMENT:[
-["COLOUR_OPTIONS","Colour Options","Required — all approved colour options together.",1],
-["EMBROIDERY_SAMPLE","Approved Embroidery Sample","Required — approved embroidery/value-addition sample.",1]],
-FINISHED:[
-["FINISHED_01","Full Product — Front","Required — clear full-product photograph.",1],
-["FINISHED_02","Back / Overall","Required — back or another useful overall view.",1],
-["FINISHED_03","Embroidery / Work Detail","Required — clear workmanship/detail close-up.",1],
-["FINISHED_04","Fabric / Texture Close-up","Required — show fabric texture, print or finish.",1],
-["FINISHED_05","Dupatta / Important Component","Optional.",0],
-["FINISHED_06","Colour Options / Assortment","Optional — all available colours together.",0]]
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwE9B1MqWx59bqKOnl_0ojyTxp_Z5yx1L0FIM3_EHHBtozJcpK89nXWxuhngHkGE3VW9Q/exec';
+let deferredPrompt = null;
+let state = {};
+
+const cfg = {
+  DEVELOPMENT: [
+    ["COLOUR_OPTIONS","Colour Options","Required — all approved colour options together.",true],
+    ["EMBROIDERY_SAMPLE","Approved Embroidery Sample","Required — approved embroidery/value-addition sample.",true]
+  ],
+  FINISHED: [
+    ["FINISHED_01","Full Product — Front","Required — clear full-product photograph.",true],
+    ["FINISHED_02","Back / Overall","Required — back or another useful overall view.",true],
+    ["FINISHED_03","Embroidery / Work Detail","Required — clear workmanship/detail close-up.",true],
+    ["FINISHED_04","Fabric / Texture Close-up","Required — show fabric texture, print or finish.",true],
+    ["FINISHED_05","Dupatta / Important Component","Optional — useful if there is a significant component.",false],
+    ["FINISHED_06","Colour Options / Assortment","Optional — all available colours together.",false]
+  ]
 };
 
-function msg(t,bad=false){let s=document.getElementById("status");s.style.display="block";s.className="status "+(bad?"bad":"ok");s.innerHTML=t}
-function render(){
-let a=document.getElementById("photoArea");a.innerHTML="";
-cfg[stage.value].forEach(x=>box(...x))
+function showStatus(text, bad) {
+  const s = document.getElementById("status");
+  s.style.display = "block";
+  s.className = "status " + (bad ? "bad" : "ok");
+  s.innerHTML = text;
 }
-function box(type,title,help,required){
-let d=document.createElement("div");d.className="card";
-d.innerHTML=`<h3>${title}</h3><div class="req ${required?'':'opt'}">${required?'REQUIRED':'OPTIONAL'}</div><div class="help">${help}</div>`;
-let cam=document.createElement("input");cam.type="file";cam.accept="image/*";cam.capture="environment";
-let gal=document.createElement("input");gal.type="file";gal.accept="image/*";
-let r=document.createElement("div");r.className="row";
-let cb=document.createElement("button");cb.className="btn dark";cb.textContent="📷 Take Photo";
-let gb=document.createElement("button");gb.className="btn light";gb.textContent="🖼️ Gallery";
-r.append(cb,gb);
-let img=document.createElement("img");img.className="preview";
-let save=document.createElement("button");save.className="btn save";save.textContent="SAVE PHOTO";
-let rep=document.createElement("button");rep.className="btn replace";rep.textContent="RETAKE / CHOOSE ANOTHER";
-cb.onclick=()=>cam.click();gb.onclick=()=>gal.click();
-cam.onchange=()=>pick(type,cam.files[0],img,save,rep);
-gal.onchange=()=>pick(type,gal.files[0],img,save,rep);
-save.onclick=()=>send(type,state[type],save);
-rep.onclick=()=>{state[type]=null;img.style.display="none";save.style.display="none";rep.style.display="none";cam.value="";gal.value=""};
-d.append(cam,gal,r,img,save,rep);document.getElementById("photoArea").appendChild(d)
-}
-function pick(type,file,img,save,rep){
-if(!file)return;if(!file.type.startsWith("image/"))return msg("Please select an image.",true);
-state[type]=file;let rd=new FileReader();rd.onload=e=>{img.src=e.target.result;img.style.display="block";save.style.display="block";rep.style.display="block";msg("Review the photo before saving.")};rd.readAsDataURL(file)
-}
-function send(type,file,btn){
-if(!article.value)return msg("Select an Article Number first.",true);
-if(BACKEND_URL.includes("PASTE_"))return msg("Backend URL is not configured yet.",true);
-btn.disabled=true;btn.textContent="SAVING...";
-let rd=new FileReader();rd.onload=e=>{
-let payload={articleNo:article.value,stage:stage.value,photoType:type,fileName:file.name,mimeType:file.type,fileData:e.target.result};
-fetch(BACKEND_URL,{method:"POST",body:JSON.stringify(payload)})
-.then(r=>r.json()).then(x=>{btn.disabled=false;btn.textContent="SAVED ✓";msg("✓ Photo saved successfully.")})
-.catch(e=>{btn.disabled=false;btn.textContent="SAVE PHOTO";msg("Upload failed: "+e.message,true)})
-};rd.readAsDataURL(file)
-}
-stage.onchange=()=>{state={};render()};
-document.addEventListener("DOMContentLoaded",render);
 
-window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBox.style.display="block"});
-installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;installBox.style.display="none"}};
-if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+async function loadArticles() {
+  const select = document.getElementById("article");
+  try {
+    const response = await fetch(BACKEND_URL + "?action=articles&v=" + Date.now(), {
+      method: "GET",
+      cache: "no-store"
+    });
+    const data = await response.json();
+
+    if (!data.success) throw new Error(data.error || "Could not load articles.");
+
+    select.innerHTML = '<option value="">Select Article Number</option>';
+    (data.articles || []).forEach(function(a) {
+      const option = document.createElement("option");
+      option.value = a.articleNo;
+      option.textContent = a.articleNo;
+      select.appendChild(option);
+    });
+
+    if (!data.articles || !data.articles.length) {
+      showStatus("No articles found in the Master Sheet.", true);
+    } else {
+      showStatus("Article list loaded successfully.", false);
+    }
+  } catch (error) {
+    select.innerHTML = '<option value="">Could not load articles</option>';
+    showStatus(
+      "Could not load Article Numbers.<br><small>" + escapeHtml(error.message) + "</small>",
+      true
+    );
+  }
+}
+
+function render() {
+  state = {};
+  const area = document.getElementById("photoArea");
+  area.innerHTML = "";
+  const heading = document.createElement("div");
+  heading.className = "section";
+  heading.textContent = document.getElementById("stage").value === "DEVELOPMENT"
+    ? "DEVELOPMENT REFERENCES"
+    : "FINISHED PRODUCT";
+  area.appendChild(heading);
+  cfg[document.getElementById("stage").value].forEach(function(x) {
+    createPhotoBox(x[0], x[1], x[2], x[3]);
+  });
+}
+
+function createPhotoBox(type, title, help, required) {
+  const d = document.createElement("div");
+  d.className = "card";
+
+  const h = document.createElement("h3");
+  h.textContent = title;
+
+  const req = document.createElement("div");
+  req.className = "req " + (required ? "" : "opt");
+  req.textContent = required ? "REQUIRED" : "OPTIONAL";
+
+  const p = document.createElement("div");
+  p.className = "help";
+  p.textContent = help;
+
+  const cam = document.createElement("input");
+  cam.type = "file";
+  cam.accept = "image/*";
+  cam.capture = "environment";
+
+  const gal = document.createElement("input");
+  gal.type = "file";
+  gal.accept = "image/*";
+
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const cb = document.createElement("button");
+  cb.className = "btn dark";
+  cb.textContent = "📷 Take Photo";
+
+  const gb = document.createElement("button");
+  gb.className = "btn light";
+  gb.textContent = "🖼️ Gallery";
+
+  row.append(cb, gb);
+
+  const img = document.createElement("img");
+  img.className = "preview";
+
+  const save = document.createElement("button");
+  save.className = "btn save";
+  save.textContent = "SAVE PHOTO";
+
+  const rep = document.createElement("button");
+  rep.className = "btn replace";
+  rep.textContent = "RETAKE / CHOOSE ANOTHER";
+
+  cb.onclick = () => cam.click();
+  gb.onclick = () => gal.click();
+
+  cam.onchange = () => pick(type, cam.files[0], img, save, rep);
+  gal.onchange = () => pick(type, gal.files[0], img, save, rep);
+
+  save.onclick = () => {
+    if (state[type]) uploadPhoto(type, state[type], save);
+  };
+
+  rep.onclick = () => {
+    state[type] = null;
+    img.style.display = "none";
+    save.style.display = "none";
+    rep.style.display = "none";
+    cam.value = "";
+    gal.value = "";
+  };
+
+  d.append(cam, gal, h, req, p, row, img, save, rep);
+  document.getElementById("photoArea").appendChild(d);
+}
+
+function pick(type, file, img, save, rep) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showStatus("Please select an image.", true);
+    return;
+  }
+
+  state[type] = file;
+  const rd = new FileReader();
+
+  rd.onload = function(e) {
+    img.src = e.target.result;
+    img.style.display = "block";
+    save.style.display = "block";
+    rep.style.display = "block";
+    showStatus("Review the photo before saving.", false);
+  };
+
+  rd.readAsDataURL(file);
+}
+
+function uploadPhoto(type, file, button) {
+  const article = document.getElementById("article").value;
+  const stage = document.getElementById("stage").value;
+
+  if (!article) {
+    showStatus("Please select an Article Number first.", true);
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "SAVING...";
+
+  const reader = new FileReader();
+
+  reader.onload = async function(e) {
+    const payload = {
+      articleNo: article,
+      stage: stage,
+      photoType: type,
+      fileName: file.name,
+      mimeType: file.type || "image/jpeg",
+      fileData: e.target.result
+    };
+
+    try {
+      /*
+       * Apps Script web apps can redirect to their execution host.
+       * The request is sent as text/plain to avoid a browser CORS
+       * preflight. The backend performs the actual Drive write.
+       */
+      await fetch(BACKEND_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      button.disabled = false;
+      button.textContent = "SAVED ✓";
+      showStatus(
+        "✓ Photo sent to the Ranglekhaa backend.<br>" +
+        "<small>Check Google Drive to confirm the file.</small>",
+        false
+      );
+
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "SAVE PHOTO";
+      showStatus("Upload failed: " + escapeHtml(error.message), true);
+    }
+  };
+
+  reader.onerror = function() {
+    button.disabled = false;
+    button.textContent = "SAVE PHOTO";
+    showStatus("Could not read the selected photo.", true);
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];
+  });
+}
+
+document.getElementById("stage").onchange = render;
+
+window.addEventListener("beforeinstallprompt", function(e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById("installBox").style.display = "block";
+});
+
+document.getElementById("installBtn").onclick = async function() {
+  if (!deferredPrompt) return;
+  await deferredPrompt.prompt();
+  deferredPrompt = null;
+  document.getElementById("installBox").style.display = "none";
+};
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(console.error);
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  render();
+  loadArticles();
+});
 </script>
 </body>
 </html>
