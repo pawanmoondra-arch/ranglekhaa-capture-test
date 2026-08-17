@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#263b2f"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png">
+<title>Ranglekhaa Capture</title>
+<style>
+:root{--g:#263b2f;--p:#f6f5f0;--l:#dddcd5;--m:#667069;--ok:#2e6b45;--bad:#9b2c2c;--gold:#806f3d}
+*{box-sizing:border-box}body{margin:0;background:var(--p);font-family:Arial,sans-serif;color:var(--g)}
+main{max-width:560px;margin:auto;padding:20px 16px 40px}.brand{font-size:24px;font-weight:700;letter-spacing:2px}.sub{color:var(--m);margin:5px 0 22px}
+label{display:block;font-weight:700;margin:14px 0 7px}select{width:100%;padding:14px;border:1px solid var(--l);border-radius:10px;background:#fff;font-size:16px}
+.card,.summary,.rolebox{background:#fff;border:1px solid var(--l);border-radius:12px;padding:15px;margin-top:14px}
+.section{margin-top:22px;font-weight:700;font-size:13px;letter-spacing:1px}h3{margin:0 0 5px;font-size:18px}.req{font-size:11px;font-weight:700}.opt{color:var(--m)}
+.help{font-size:13px;color:var(--m);line-height:1.4;margin:7px 0 12px}.row{display:flex;gap:9px}.btn{flex:1;border:0;border-radius:9px;padding:13px 8px;font-size:15px}
+.dark{background:var(--g);color:white}.light{background:#e9e9e3;color:var(--g)}input[type=file]{display:none}
+.preview{display:none;width:100%;max-height:280px;object-fit:contain;border-radius:9px;margin-top:12px;background:#eee}.save,.cancel,.view{display:none;width:100%;margin-top:9px}
+.save{background:var(--g);color:#fff}.cancel{background:#e9e9e3;color:var(--g)}
+.badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;margin:3px 0 8px;background:#eeeae1;color:var(--gold)}
+.badge.ok{background:#dfe9e1;color:var(--ok)}.badge.pending{background:#f0ead7;color:var(--gold)}.badge.locked{background:#e3e7e3;color:var(--g)}
+.progress{height:8px;background:#e6e6e0;border-radius:10px;overflow:hidden;margin:9px 0}.bar{height:100%;background:var(--g)}
+.complete{color:var(--ok);font-weight:700}.incomplete{color:var(--gold);font-weight:700}.status{margin-top:18px;background:#fff;border:1px solid var(--l);padding:13px;border-radius:10px;line-height:1.45}.bad{color:var(--bad)}
+.action{width:100%;border:0;border-radius:9px;padding:13px;margin-top:9px;font-size:15px}.submit{background:var(--g);color:#fff}.approve{background:var(--ok);color:#fff}.unlock{background:#e9e9e3;color:var(--g)}
+.rolebox{font-size:13px;color:var(--m)}.rolebox b{color:var(--g)}
+.install{display:none;margin:14px 0;padding:13px;border-radius:10px;background:#dfe7e1}.install button{width:100%;padding:12px;border:0;border-radius:8px;background:var(--g);color:#fff}
+.note{font-size:12px;color:var(--m);margin-top:7px}
+</style>
+</head>
+<body><main>
+<div class="brand">RANGLEKHAA</div><div class="sub">Product Capture</div>
+<div id="installBox" class="install"><b>Install Ranglekhaa</b><p>Add this app to your phone home screen.</p><button id="installBtn">INSTALL APP</button></div>
+
+<div class="rolebox"><b>Test User:</b> <span id="userLabel"></span> · <b>Role:</b> <span id="roleLabel"></span></div>
+
+<label>Article Number</label><select id="article"><option value="">Loading articles...</option></select>
+<label>Capture Stage</label><select id="stage"><option value="DEVELOPMENT">Development</option><option value="FINISHED">Finished Product</option></select>
+
+<div id="summary"></div><div id="photoArea"></div><div id="status" class="status" style="display:none"></div>
+</main>
+<script>
+const BACKEND_URL="https://script.google.com/macros/s/AKfycbwE9B1MqWx59bqKOnl_0ojyTxp_Z5yx1L0FIM3_EHHBtozJcpK89nXWxuhngHkGE3VW9Q/exec";
+const STAFF_EMAIL="nsoni9068@gmail.com", APPROVER_EMAIL="pawanmoondra@gmail.com";
+let testUser=localStorage.getItem("rkl_test_user")||STAFF_EMAIL;
+let role=testUser.toLowerCase()===APPROVER_EMAIL.toLowerCase()?"APPROVER":"STAFF";
+let statusData=null,captures={},state={},deferredPrompt=null;
+
+const cfg={DEVELOPMENT:[
+["COLOUR_OPTIONS","Colour Options","Required — all approved colour options together.",true],
+["EMBROIDERY_SAMPLE","Approved Embroidery Sample","Required — approved embroidery/value-addition sample.",true]],
+FINISHED:[
+["FINISHED_01","Full Product — Front","Required — clear full-product photograph.",true],
+["FINISHED_02","Back / Overall","Required — back or another useful overall view.",true],
+["FINISHED_03","Embroidery / Work Detail","Required — clear workmanship/detail close-up.",true],
+["FINISHED_04","Fabric / Texture Close-up","Required — show fabric texture, print or finish.",true],
+["FINISHED_05","Dupatta / Important Component","Optional — useful if there is a significant component.",false],
+["FINISHED_06","Colour Options / Assortment","Optional — all available colours together.",false]]};
+
+function showStatus(t,b=false){const s=document.getElementById("status");s.style.display="block";s.className="status "+(b?"bad":"");s.innerHTML=t}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function setUser(){document.getElementById("userLabel").textContent=testUser;document.getElementById("roleLabel").textContent=role}
+
+async function loadArticles(){try{const r=await fetch(BACKEND_URL+"?action=articles&v="+Date.now(),{cache:"no-store"}),d=await r.json();if(!d.success)throw Error(d.error);const s=document.getElementById("article");s.innerHTML='<option value="">Select Article Number</option>';(d.articles||[]).forEach(a=>{let o=document.createElement("option");o.value=a.articleNo;o.textContent=a.articleNo;s.appendChild(o)})}catch(e){showStatus("Could not load articles: "+esc(e.message),true)}}
+
+async function loadStatus(){const a=document.getElementById("article").value;if(!a){statusData=null;captures={};render();return}
+try{
+ const sr=await fetch(BACKEND_URL+"?action=status&article="+encodeURIComponent(a)+"&v="+Date.now(),{cache:"no-store"}),sd=await sr.json();if(!sd.success)throw Error(sd.error);statusData=sd.status;
+ const cr=await fetch(BACKEND_URL+"?action=captures&article="+encodeURIComponent(a)+"&v="+Date.now(),{cache:"no-store"}),cd=await cr.json();if(!cd.success)throw Error(cd.error);captures={};(cd.captures||[]).forEach(x=>{if(!x._workflow)captures[x.stage+"|"+x.photoType]=x});render();
+}catch(e){showStatus("Could not load status: "+esc(e.message),true);render()}}
+
+function render(){const stage=document.getElementById("stage").value;document.getElementById("photoArea").innerHTML="";renderSummary(stage);const h=document.createElement("div");h.className="section";h.textContent=stage==="DEVELOPMENT"?"DEVELOPMENT REFERENCES":"FINISHED PRODUCT";document.getElementById("photoArea").appendChild(h);cfg[stage].forEach(x=>createBox(...x))}
+function renderSummary(stage){
+ const s=document.getElementById("summary");s.innerHTML="";if(!statusData)return;const st=statusData[stage],pct=st.requiredTotal?Math.round(st.requiredCaptured/st.requiredTotal*100):100;
+ let workflow=st.state==="LOCKED"?"🔒 LOCKED":st.state==="PENDING_APPROVAL"?"⏳ PENDING APPROVAL":st.complete?"✓ COMPLETE":"○ INCOMPLETE";
+ s.innerHTML=`<div class="summary"><b>${stage==="DEVELOPMENT"?"Development":"Finished Product"}</b><div style="margin-top:6px">${st.requiredCaptured}/${st.requiredTotal} required captures complete</div><div class="progress"><div class="bar" style="width:${pct}%"></div></div><div class="${st.complete?"complete":"incomplete"}">${workflow}</div>${st.state==="DRAFT"&&st.complete&&role==="STAFF"?'<button class="action submit" id="submitBtn">SUBMIT FOR APPROVAL</button>':""}${st.state==="PENDING_APPROVAL"&&role==="APPROVER"?'<button class="action approve" id="approveBtn">APPROVE & LOCK</button>':""}${st.state==="LOCKED"&&role==="APPROVER"?'<button class="action unlock" id="unlockBtn">UNLOCK FOR CORRECTION</button>':""}<div class="note">${st.state==="PENDING_APPROVAL"?"Submitted for approver review.":st.state==="LOCKED"?"This stage is controlled; changes require approver unlock.":""}</div></div>`;
+ const sb=document.getElementById("submitBtn"),ab=document.getElementById("approveBtn"),ub=document.getElementById("unlockBtn");
+ if(sb)sb.onclick=()=>workflowAction("SUBMIT_APPROVAL",stage,sb);
+ if(ab)ab.onclick=()=>workflowAction("APPROVE_LOCK",stage,ab);
+ if(ub)ub.onclick=()=>workflowAction("UNLOCK",stage,ub);
+}
+
+function createBox(type,title,help,required){
+ const d=document.createElement("div");d.className="card";const stage=document.getElementById("stage").value;const ex=captures[stage+"|"+type];const locked=statusData&&statusData[stage]&&statusData[stage].locked;
+ d.innerHTML=`<h3>${title}</h3><div class="req ${required?"":"opt"}">${required?"REQUIRED":"OPTIONAL"}</div><div class="help">${help}</div><div class="badge ${locked?"locked":ex?"ok":""}">${locked?"🔒 LOCKED":ex?"✓ CAPTURED":"○ NOT CAPTURED"}</div>${ex?'<div class="note">Current: '+esc(ex.fileName)+'</div>':""}`;
+ const cam=document.createElement("input"),gal=document.createElement("input");cam.type="file";cam.accept="image/*";cam.capture="environment";gal.type="file";gal.accept="image/*";
+ const row=document.createElement("div");row.className="row";const cb=document.createElement("button");cb.className="btn dark";cb.textContent=ex?"📷 Take Replacement":"📷 Take Photo";const gb=document.createElement("button");gb.className="btn light";gb.textContent="🖼️ Gallery";
+ const img=document.createElement("img");img.className="preview";const save=document.createElement("button");save.className="action save";save.textContent=ex?"REPLACE PHOTO":"SAVE PHOTO";const cancel=document.createElement("button");cancel.className="action cancel";cancel.textContent="CANCEL";const view=document.createElement("button");view.className="action view light";view.textContent="OPEN CURRENT PHOTO";
+ if(ex){view.style.display="block";view.onclick=()=>{if(ex.url)window.open(ex.url,"_blank")}}
+ if(!locked){cb.onclick=()=>cam.click();gb.onclick=()=>gal.click()}else{cb.disabled=true;gb.disabled=true}
+ cam.onchange=()=>pick(type,cam.files[0],img,save,cancel);gal.onchange=()=>pick(type,gal.files[0],img,save,cancel);save.onclick=()=>{if(state[type])upload(type,state[type],save,!!ex)};cancel.onclick=()=>{state[type]=null;img.style.display="none";save.style.display="none";cancel.style.display="none"};
+ row.append(cb,gb);d.append(cam,gal,row,img,save,cancel,view);document.getElementById("photoArea").appendChild(d)
+}
+function pick(type,file,img,save,cancel){if(!file)return;if(!file.type.startsWith("image/"))return showStatus("Please select an image.",true);state[type]=file;let r=new FileReader();r.onload=e=>{img.src=e.target.result;img.style.display="block";save.style.display="block";cancel.style.display="block";showStatus("Review the photo before saving.",false)};r.readAsDataURL(file)}
+function upload(type,file,button,replacement){const a=document.getElementById("article").value,stage=document.getElementById("stage").value;button.disabled=true;button.textContent=replacement?"REPLACING...":"SAVING...";let r=new FileReader();r.onload=async e=>{try{await fetch(BACKEND_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:replacement?"REPLACE":"CREATE",articleNo:a,stage,photoType:type,fileName:file.name,mimeType:file.type||"image/jpeg",fileData:e.target.result})});button.textContent=replacement?"REPLACED ✓":"SAVED ✓";showStatus("✓ Photo sent to backend.",false);setTimeout(loadStatus,1800)}catch(err){button.disabled=false;button.textContent=replacement?"REPLACE PHOTO":"SAVE PHOTO";showStatus("Upload failed: "+esc(err.message),true)}};r.readAsDataURL(file)}
+
+async function workflowAction(action,stage,button){const article=document.getElementById("article").value;button.disabled=true;button.textContent="PROCESSING...";try{await fetch(BACKEND_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,articleNo:article,stage,userEmail:testUser})});showStatus("✓ Request sent. Refreshing workflow status...",false);setTimeout(loadStatus,1600)}catch(e){button.disabled=false;showStatus("Action failed: "+esc(e.message),true)}}
+
+document.getElementById("article").onchange=loadStatus;document.getElementById("stage").onchange=render;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;document.getElementById("installBox").style.display="block"});document.getElementById("installBtn").onclick=async()=>{if(deferredPrompt){await deferredPrompt.prompt();deferredPrompt=null;document.getElementById("installBox").style.display="none"}};
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(console.error);
+document.addEventListener("DOMContentLoaded",()=>{setUser();render();loadArticles()});
+</script></main></body></html>
